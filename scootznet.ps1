@@ -18,34 +18,51 @@ foreach ($File in $Library)
     }
 }
 
-$MyNetwork = [NeuralNetwork]::new(@(8, 16, 8))
+$NETWORK_LAYERS = @(8, 16, 8)
+$RANDOM_DATA_SIZE = 10
+$TRAINING_PASS_EPOCHS = 1000
+$TRAINING_PASSES = 10
 
-$inputs = @(
-    @(0, 0, 0, 0, 0, 0, 0, 0),
-    @(0, 0, 0, 0, 0, 0, 0, 1),
-    @(0, 0, 0, 0, 0, 0, 1, 0),
-    @(0, 0, 0, 0, 0, 1, 0, 0),
-    @(0, 0, 0, 0, 1, 0, 0, 0),
-    @(0, 0, 0, 1, 0, 0, 0, 0),
-    @(0, 0, 1, 0, 0, 0, 0, 0),
-    @(0, 1, 0, 0, 0, 0, 0, 0)
-)
+Function To-Binary ($Number)
+{
+    $binary = [Convert]::ToString($Number, 2).PadLeft(8, '0').ToCharArray() | ForEach-Object { [int]::Parse($_) }
+    return $binary
+}
 
-$outputs = @(
-    @(0, 0, 0, 0, 0, 0, 0, 0),
-    @(0, 0, 0, 0, 0, 0, 1, 0),
-    @(0, 0, 0, 0, 0, 1, 0, 0),
-    @(0, 0, 0, 0, 1, 0, 0, 0),
-    @(0, 0, 0, 1, 0, 0, 0, 0),
-    @(0, 0, 1, 0, 0, 0, 0, 0),
-    @(0, 1, 0, 0, 0, 0, 0, 0),
-    @(1, 0, 0, 0, 0, 0, 0, 0)
-)
+Function From-Binary ($Binary)
+{
+    return [Convert]::ToInt32($Binary -join '', 2)
+}
 
-$epochs = 10000
-Write-Host "Training the neural network with $($epochs) epochs..."
+Function Random-SevenBitNumber
+{
+    return Get-Random -Minimum 0 -Maximum 127
+}
+
+Write-Host "Creating a neural network with $($NETWORK_LAYERS.Length) layers: $($NETWORK_LAYERS -join '-')..."
+$MyNetwork = [NeuralNetwork]::new($NETWORK_LAYERS)
+
 $Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-$MyNetwork.Train($inputs, $outputs, $epochs)
+for ($Pass = 0; $Pass -lt $TRAINING_PASSES; $Pass++)
+{
+    Write-Host "Training pass $($Pass + 1) of $($TRAINING_PASSES)..."
+    $inputsBase = @()
+    while (([array]$inputsBase).Length -lt $RANDOM_DATA_SIZE)
+    { 
+        $inputsBase += Random-SevenBitNumber 
+    }
+
+    $inputs = @()
+    $outputs = @()
+    $inputsBase | ForEach-Object { 
+        $inputRow = To-Binary $_
+        $outputRow = To-Binary ($_ * 2)
+        $inputs += ,$inputRow
+        $outputs += ,$outputRow
+    }
+
+    $MyNetwork.Train($inputs, $outputs, $TRAINING_PASS_EPOCHS)
+}
 $Stopwatch.Stop()
 Write-Host "Training completed in $($Stopwatch.Elapsed.TotalSeconds) seconds"
 
