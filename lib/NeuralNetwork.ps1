@@ -1,5 +1,6 @@
 class NeuralNetwork {
     [Layer[]]$Layers
+    [decimal]$LearningRate = 0.01
 
     NeuralNetwork([int[]]$layerSizes) {
         $this.Layers = @()
@@ -42,7 +43,7 @@ class NeuralNetwork {
         foreach ($layer in $this.Layers) {
             foreach ($neuron in $layer.Neurons) {
                 for ($i = 0; $i -lt $neuron.Weights.Length; $i++) {
-                    $neuron.Weights[$i] += 0.1 * $neuron.Delta * $neuron.Output
+                    $neuron.Weights[$i] += $this.LearningRate * $neuron.Delta * $neuron.Output
                 }
                 $neuron.Bias += 0.1 * $neuron.Delta
             }
@@ -51,7 +52,7 @@ class NeuralNetwork {
 
     [void] Train([double[][]]$inputs, [double[][]]$outputs, [int]$epochs) {
         for ($epoch = 0; $epoch -lt $epochs; $epoch++) {
-            if ($epoch % 1000 -eq 0) { Write-Host "Epoch: $epoch" }
+            if ($epoch % 1000 -eq 0 -and $epoch -gt 0) { Write-Host "Epoch: $epoch" }
             for ($i = 0; $i -lt $inputs.Length; $i++) {
                 $this.Forward($inputs[$i])
                 $this.Backward($outputs[$i])
