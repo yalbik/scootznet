@@ -18,8 +18,9 @@ foreach ($File in $Library)
     }
 }
 
-$NETWORK_LAYERS = @(8, 16, 8)
-$RANDOM_DATA_SIZE = 16
+$NETWORK_LAYERS = @(8, 8)
+$LEARNING_RATE = 0.01
+$RANDOM_DATA_SIZE = 32
 $TRAINING_PASS_EPOCHS = 1000
 $TRAINING_PASSES = 10
 
@@ -39,8 +40,25 @@ Function Random-SevenBitNumber
     return Get-Random -Minimum 0 -Maximum 127
 }
 
+Function Smooth-Output ($RawOutput)
+{
+    $SmoothedOutput = @()
+    $RawOutput | ForEach-Object { $SmoothedOutput += [Math]::Round($_) }
+    return $SmoothedOutput
+}
+
+Function Actual-Delta ($Expected, $Actual)
+{
+    $Different = 0
+    for ($i = 0; $i -lt $Expected.Length; $i++)
+    {
+        $Different += [Math]::Abs($Expected[$i] - $Actual[$i])
+    }
+    return ($Different / $Expected.Length)
+}
+
 Write-Host "Creating a neural network with $($NETWORK_LAYERS.Length) layers: $($NETWORK_LAYERS -join '-')..."
-$MyNetwork = [NeuralNetwork]::new($NETWORK_LAYERS)
+$MyNetwork = [NeuralNetwork]::new($NETWORK_LAYERS, $LEARNING_RATE)
 
 Write-Host "Training the network with $($TRAINING_PASSES) passes of $($TRAINING_PASS_EPOCHS) epochs each, $($RANDOM_DATA_SIZE) inputs per pass..."
 
@@ -84,6 +102,7 @@ $expectedOutputsInt = $testInputsInt | ForEach-Object { [int]($_ * 2) }
 $testInputs = $testInputsInt | ForEach-Object { ,(To-Binary $_) }
 $expectedOutputs = $expectedOutputsInt | ForEach-Object { ,(To-Binary $_) }
 
+$ActualDeltas = @()
 for ($i = 0; $i -lt $testInputs.Length; $i++)
 {
     $inputInt = $testInputsInt[$i]
@@ -92,8 +111,18 @@ for ($i = 0; $i -lt $testInputs.Length; $i++)
     $expected = $expectedOutputs[$i]
 
     $output = $MyNetwork.Predict(@($input))
-    
-    Write-Host "Input: ($($inputInt)): $($input)"
-    Write-Host "`tExpected: ($($expectedInt)): $($expected)"
-    Write-Host "`tPredicted: $output"
+    $smoothedOutput = Smooth-Output $output
+    $smoothedOutputInt = From-Binary $smoothedOutput
+    $actualDelta = Actual-Delta $expected $smoothedOutput
+
+    $ActualDeltas += $actualDelta
+
+    $deltaColor = if ($actualDelta -eq 0) { 'Green' } elseif ($actualDelta -lt 0.2) { 'Yellow' } elseif ($actualDelta -lt 0.6) { 'Magenta' } else { 'Red' }
+    Write-Host "Input: $($input) ($($inputInt))"
+    Write-Host "`tExpected: $($expected) ($($expectedInt))"
+    Write-Host "`tPredicted (raw): $output"
+    Write-Host "`tPredicted (smoothed): $smoothedOutput ($($smoothedOutputInt))"
+    Write-Host "`tActual delta: " -NoNewLine
+    Write-Host "$actualDelta" -ForegroundColor $deltaColor
 }
+Write-Host "Average delta: $(($ActualDeltas | Measure-Object -Average).Average)"
