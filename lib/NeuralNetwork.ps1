@@ -45,7 +45,7 @@ class NeuralNetwork {
                 for ($i = 0; $i -lt $neuron.Weights.Length; $i++) {
                     $neuron.Weights[$i] += $this.LearningRate * $neuron.Delta * $neuron.Output
                 }
-                $neuron.Bias += 0.1 * $neuron.Delta
+                $neuron.Bias += $this.LearningRate * $neuron.Delta
             }
         }
     }
