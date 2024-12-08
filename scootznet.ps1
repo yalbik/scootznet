@@ -19,10 +19,12 @@ foreach ($File in $Library)
 }
 
 $NETWORK_LAYERS = @(8, 8)
-$LEARNING_RATE = 0.01
+$LEARNING_RATE = 0.001
 $RANDOM_DATA_SIZE = 32
 $TRAINING_PASS_EPOCHS = 1000
-$TRAINING_PASSES = 10
+$TRAINING_PASSES = 100
+
+$RESULTS_FILE = "$($PSScriptRoot)\ScootznetTrainingResults.json"
 
 Function To-Binary ($Number)
 {
@@ -125,4 +127,32 @@ for ($i = 0; $i -lt $testInputs.Length; $i++)
     Write-Host "`tActual delta: " -NoNewLine
     Write-Host "$actualDelta" -ForegroundColor $deltaColor
 }
+
+$ResultData = [PSCustomObject]@{
+    'NetworkLayers' = $NETWORK_LAYERS -join '-';
+    'LearningRate' = $LEARNING_RATE;
+    'RandomDataSize' = $RANDOM_DATA_SIZE;
+    'TrainingPassEpochs' = $TRAINING_PASS_EPOCHS;
+    'TrainingPasses' = $TRAINING_PASSES;
+    'TrainingTime' = $Stopwatch.Elapsed.TotalSeconds;
+    'AverageDelta' = $(($ActualDeltas | Measure-Object -Average).Average);
+}
+
 Write-Host "Average delta: $(($ActualDeltas | Measure-Object -Average).Average)"
+
+Write-Host "Updating results file $($RESULTS_FILE)..."
+if (Test-Path -Path "$RESULTS_FILE")
+{
+    $Results = [array](Get-Content $RESULTS_FILE | ConvertFrom-Json)
+    $Results += $ResultData
+    $Results | ConvertTo-Json | Set-Content -Path $RESULTS_FILE
+
+    # rewrite the json so members are all in the same order, ConvertTo-Json doesn't guarantee order
+    $Results = [array](Get-Content $RESULTS_FILE | ConvertFrom-Json)
+    $Results | ConvertTo-Json | Set-Content -Path $RESULTS_FILE
+}
+else
+{
+    $ResultData | ConvertTo-Json | Set-Content -Path $RESULTS_FILE
+}
+
