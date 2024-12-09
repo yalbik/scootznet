@@ -3,10 +3,11 @@ class NeuralNetwork {
     [decimal]$LearningRate
 
     NeuralNetwork([int[]]$layerSizes, [decimal]$learningRate) {
-        $this.LearningRate = $learningRate
+        $this.LearningRate = $LearningRate
         $this.Layers = @()
-        for ($i = 0; $i -lt $layerSizes.Length - 1; $i++) {
-            $this.Layers += [Layer]::new($layerSizes[$i + 1], $layerSizes[$i])
+        for ($i = 0; $i -lt $layerSizes.Length; $i++) {
+            $layerInputSize = if ($i -eq 0) { $layerSizes[$i] } else { $layerSizes[$i - 1] }
+            $this.Layers += [Layer]::new($layerSizes[$i], $layerInputSize)
         }
         Write-Host "Neural network initialized with learning rate $($this.LearningRate)"
     }
