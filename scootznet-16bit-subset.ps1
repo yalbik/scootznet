@@ -9,8 +9,12 @@ foreach ($lib in $Library) {
     . (Join-Path $PSScriptRoot $lib)
 }
 
-# Create neural network with architecture [16, 1] - direct input to output
-$network = [NeuralNetwork]::new(@(16, 1), 0.01)
+$LAYERS = @(16, 8, 1)  # 16 input neurons for 16-bit binary, 8 hidden, 1 output neuron for doubled value
+$LEARNING_RATE = 0.01
+$EPOCHS = 2500
+
+# Create neural network with architecture [16, 8, 1] - input to hidden to output
+$network = [NeuralNetwork]::new($LAYERS, $LEARNING_RATE)
 
 # Generate training data for doubling 16-bit numbers (subset for faster training)
 Write-Host "Generating training data for 16-bit numbers (subset for faster training)..."
@@ -47,7 +51,7 @@ Write-Host "Each input is 16-bit binary, target is doubled value normalized to [
 Write-Host "`nStarting training..."
 Write-Host "Training on subset for faster development and testing."
 $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-$network.Train($trainingInputs, $trainingTargets, 2500)
+$network.Train($trainingInputs, $trainingTargets, $EPOCHS)
 $stopwatch.Stop()
 Write-Host "Total training time: $([Math]::Round($stopwatch.Elapsed.TotalSeconds, 2)) seconds"
 
@@ -70,21 +74,27 @@ foreach ($testNum in $testNumbers) {
             $binaryTest += 0.0
         }
     }
-    
-    # Get prediction
+      # Get prediction
     $prediction = $network.Predict($binaryTest)
     $denormalizedPrediction = $prediction[0] * 131070.0  # Convert back to actual number
+    $roundedPrediction = [Math]::Round($denormalizedPrediction)  # Round to nearest integer
     $expected = $testNum * 2
-      # Calculate accuracy percentage
-    $errorAmount = [Math]::Abs([double]$expected - [double]$denormalizedPrediction)
+      # Calculate accuracy percentage using rounded prediction
+    $errorAmount = [Math]::Abs([double]$expected - [double]$roundedPrediction)
     $accuracy = if ([double]$expected -eq 0.0) { 
-        if ([double]$denormalizedPrediction -eq 0.0) { 100.0 } else { 0.0 }
+        if ([double]$roundedPrediction -eq 0.0) { 100.0 } else { 0.0 }
     } else { 
         [Math]::Max(0.0, 100.0 - ([double]$errorAmount / [double]$expected * 100.0))
     }
     $totalAccuracy += [double]$accuracy
     
-    Write-Host "Input: $testNum, Predicted: $([Math]::Round([double]$denormalizedPrediction, 1)), Expected: $expected, Accuracy: $([Math]::Round([double]$accuracy, 1))%"
+    # Determine color based on accuracy
+    $color = if ([double]$accuracy -eq 100.0) { 'Green' }
+             elseif ([double]$accuracy -gt 98.0) { 'Yellow' }
+             elseif ([double]$accuracy -gt 90.0) { 'DarkYellow' } 
+             else { 'Red' }
+    
+    Write-Host "Input: $testNum, Predicted: $roundedPrediction, Expected: $expected, Accuracy: $([Math]::Round([double]$accuracy, 1))%" -ForegroundColor $color
 }
 
 $averageAccuracy = $totalAccuracy / $testNumbers.Length
