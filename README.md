@@ -24,6 +24,16 @@ ScootzNet learns the doubling function for binary numbers. Supports both 8-bit (
 - `scootznet-16bit-subset.ps1` - 16-bit subset (~1,024 samples, 2,500 epochs)
 - `scootznet-16bit-full.ps1` - 16-bit full (65,536 samples, 2,500 epochs)
 
+## Testing
+
+Comprehensive unit tests are available in the `tests/` directory using the Pester framework:
+- `tests/Neuron.Tests.ps1` - Tests for individual neuron functionality
+- `tests/Layer.Tests.ps1` - Tests for neural network layer operations  
+- `tests/NeuralNetwork.Tests.ps1` - Tests for complete network functionality
+- `tests/Run-AllTests.ps1` - Test runner that executes all test suites
+
+Run all tests with: `powershell -File tests/Run-AllTests.ps1`
+
 ## Usage
 
 ### 8-bit Numbers (0-255) - Recommended for Learning

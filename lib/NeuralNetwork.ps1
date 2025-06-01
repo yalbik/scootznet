@@ -2,10 +2,23 @@ class NeuralNetwork {
     [Layer[]] $Layers
     [double] $LearningRate
     [double[]] $LastInput
-    [int[]] $LayerSizes
-
-    # Constructor
+    [int[]] $LayerSizes    # Constructor
     NeuralNetwork([int[]] $layerSizes, [double] $learningRate) {
+        # Input validation
+        if ($layerSizes.Length -eq 0) {
+            throw "Layer sizes array cannot be empty"
+        }
+        
+        if ($learningRate -le 0) {
+            throw "Learning rate must be positive"
+        }
+        
+        foreach ($size in $layerSizes) {
+            if ($size -le 0) {
+                throw "All layer sizes must be positive (found size: $size)"
+            }
+        }
+        
         $this.LayerSizes = $layerSizes
         $this.LearningRate = $learningRate
         $this.Layers = @()
@@ -45,10 +58,13 @@ class NeuralNetwork {
         }
         Write-Host "==========================================="
         Write-Host ""
-    }
-
-    # Forward pass through the network
+    }    # Forward pass through the network
     [double[]] Forward([double[]] $inputs) {
+        # Input validation
+        if ($inputs.Length -ne $this.LayerSizes[0]) {
+            throw "Input size ($($inputs.Length)) does not match expected input layer size ($($this.LayerSizes[0]))"
+        }
+        
         $this.LastInput = $inputs
         $currentOutputs = $inputs
 
@@ -59,10 +75,18 @@ class NeuralNetwork {
         }
 
         return $currentOutputs
-    }
-
-    # Backward pass (backpropagation)
+    }    # Backward pass (backpropagation)
     [void] Backward([double[]] $expected) {
+        # Input validation
+        if ($null -eq $this.LastInput) {
+            throw "Forward pass must be called before backward pass"
+        }
+        
+        $outputLayerSize = $this.Layers[-1].Neurons.Length
+        if ($expected.Length -ne $outputLayerSize) {
+            throw "Expected output size ($($expected.Length)) does not match output layer size ($outputLayerSize)"
+        }
+        
         # Calculate output layer delta (linear activation derivative = 1)
         $outputLayer = $this.Layers[-1]
         for ($i = 0; $i -lt $outputLayer.Neurons.Length; $i++) {
@@ -115,9 +139,17 @@ class NeuralNetwork {
                 $biasUpdate = $this.LearningRate * $neuron.Delta
                 $neuron.Bias += $biasUpdate
             }
-        }
-    }    # Train the network
+        }    }    # Train the network
     [void] Train([double[][]] $inputs, [double[][]] $targets, [int] $epochs) {
+        # Input validation
+        if ($inputs.Length -ne $targets.Length) {
+            throw "Number of input samples ($($inputs.Length)) must match number of target samples ($($targets.Length))"
+        }
+        
+        if ($epochs -lt 0) {
+            throw "Number of epochs must be non-negative"
+        }
+        
         Write-Host "Starting training for $epochs epochs..."
         $trainingStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
         
