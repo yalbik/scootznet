@@ -12,15 +12,16 @@ foreach ($lib in $Library) {
 # Create neural network with architecture [16, 1] - direct input to output
 $network = [NeuralNetwork]::new(@(16, 1), 0.01)
 
-# Generate training data for doubling 16-bit numbers
-Write-Host "Generating training data..."
+# Generate training data for doubling 16-bit numbers (subset for faster training)
+Write-Host "Generating training data for 16-bit numbers (subset for faster training)..."
 $trainingInputs = @()
 $trainingTargets = @()
 
-# Create training samples for all 16-bit numbers (0-65535)
-# Note: This will be 65536 samples, which may take some time
-Write-Host "Generating 65,536 training samples for 16-bit numbers..."
-for ($i = 0; $i -le 65535; $i++) {
+# Create training samples for a subset of 16-bit numbers (every 64th number for speed)
+# This gives us about 1024 samples instead of 65536
+$stepSize = 64
+Write-Host "Generating training samples (every ${stepSize}th number from 0-65535)..."
+for ($i = 0; $i -le 65535; $i += $stepSize) {
     # Convert number to 16-bit binary array
     $binaryInput = @()
     for ($bit = 15; $bit -ge 0; $bit--) {
@@ -37,11 +38,6 @@ for ($i = 0; $i -le 65535; $i++) {
     
     $trainingInputs += ,$binaryInput
     $trainingTargets += ,@($normalizedTarget)
-    
-    # Progress indicator every 10,000 samples
-    if (($i % 10000) -eq 0) {
-        Write-Host "Generated $i samples..."
-    }
 }
 
 Write-Host "Training data generated: $($trainingInputs.Length) samples"
@@ -49,18 +45,17 @@ Write-Host "Each input is 16-bit binary, target is doubled value normalized to [
 
 # Train the network
 Write-Host "`nStarting training..."
-Write-Host "Note: Training on 65,536 samples may take considerable time."
-Write-Host "Consider reducing training epochs if needed."
+Write-Host "Training on subset for faster development and testing."
 $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-$network.Train($trainingInputs, $trainingTargets, 5000)  # Reduced epochs for 16-bit training
+$network.Train($trainingInputs, $trainingTargets, 8000)
 $stopwatch.Stop()
 Write-Host "Total training time: $([Math]::Round($stopwatch.Elapsed.TotalSeconds, 2)) seconds"
 
 # Test the network with random examples
-Write-Host "`nTesting network with 10 random 16-bit inputs:"
+Write-Host "`nTesting network with 15 random 16-bit inputs:"
 $rand = New-Object System.Random
 $testNumbers = @()
-for ($i = 0; $i -lt 10; $i++) {
+for ($i = 0; $i -lt 15; $i++) {
     $testNumbers += $rand.Next(0, 65536)
 }
 $totalAccuracy = 0.0
@@ -94,3 +89,5 @@ foreach ($testNum in $testNumbers) {
 
 $averageAccuracy = $totalAccuracy / $testNumbers.Length
 Write-Host "`nOverall Test Accuracy: $([Math]::Round($averageAccuracy, 1))%"
+Write-Host "`nNote: This was trained on a subset of data (every ${stepSize}th number)."
+Write-Host "For full training on all 65,536 16-bit numbers, use scootznet.ps1"
