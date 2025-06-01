@@ -1,123 +1,96 @@
 # ScootzNet - PowerShell Neural Network
 
-A simple feedforward neural network implementation in PowerShell that learns to multiply numbers by 2. This project demonstrates fundamental neural network concepts including forward propagation, backpropagation, and gradient descent training.
+A feedforward neural network implementation in PowerShell that learns to multiply numbers by 2. Demonstrates neural network fundamentals including forward/backward propagation and gradient descent.
 
 ## Overview
 
-ScootzNet is designed to learn the doubling function for binary numbers. It takes binary representations of numbers as input and outputs the doubled value. The network supports both 8-bit and 16-bit number processing.
+ScootzNet learns the doubling function for binary numbers. Supports both 8-bit (0-255) and 16-bit (0-65535) number processing with flexible architecture allowing unlimited hidden layers.
 
 ## Features
 
-- **Pure PowerShell Implementation**: No external dependencies required
-- **Modular Architecture**: Clean separation of Neuron, Layer, and NeuralNetwork classes
-- **Flexible Input Size**: Supports both 8-bit (0-255) and 16-bit (0-65535) numbers
-- **Xavier Weight Initialization**: Proper weight initialization for stable training
-- **Comprehensive Training**: Options for full dataset or subset training
-- **Real-time Progress Tracking**: Training progress and timing information
-- **Accuracy Metrics**: Detailed accuracy reporting for test predictions
-
-## Architecture
-
-### Network Structure
-- **Input Layer**: 8 or 16 neurons (for 8-bit or 16-bit binary input)
-- **Output Layer**: 1 neuron (for the doubled result)
-- **No Hidden Layers**: Direct mapping from input to output
-
-### Classes
-
-#### Neuron (`lib/Neuron.ps1`)
-- Individual neuron with weights, bias, and activation functions
-- Supports both sigmoid and linear activation
-- Xavier weight initialization for stable training
-- Overflow protection in sigmoid function
-
-#### Layer (`lib/Layer.ps1`)
-- Collection of neurons forming a network layer
-- Forward pass functionality
-- Construction reporting for debugging
-
-#### NeuralNetwork (`lib/NeuralNetwork.ps1`)
-- Complete neural network with multiple layers
-- Forward and backward propagation
-- Training with configurable epochs and learning rate
-- Prediction functionality
+- **Pure PowerShell**: No external dependencies
+- **Modular Design**: Neuron, Layer, and NeuralNetwork classes
+- **Flexible Architecture**: Supports any number of hidden layers
+- **Xavier Initialization**: Stable weight initialization
+- **Real-time Progress**: Training progress and timing
+- **Accuracy Metrics**: Detailed performance reporting
 
 ## Files
 
-### Core Library
-- `lib/Neuron.ps1` - Individual neuron implementation
+- `lib/Neuron.ps1` - Individual neuron with Xavier initialization
 - `lib/Layer.ps1` - Neural network layer implementation
-- `lib/NeuralNetwork.ps1` - Complete neural network implementation
-
-### Training Scripts
-- `scootznet.ps1` - Full training on all possible inputs
-- `scootznet-16bit-subset.ps1` - Faster training on subset of data
+- `lib/NeuralNetwork.ps1` - Complete network with training/prediction
+- `scootznet-8bit.ps1` - 8-bit training (256 samples, 2,500 epochs)
+- `scootznet-16bit-subset.ps1` - 16-bit subset (~1,024 samples, 2,500 epochs)
+- `scootznet-16bit-full.ps1` - 16-bit full (65,536 samples, 2,500 epochs)
 
 ## Usage
 
-### 8-bit Numbers (0-255)
+### 8-bit Numbers (0-255) - Recommended for Learning
 ```powershell
-# Run the original 8-bit training
-cd c:\codez\scootznet
-powershell -File scootznet.ps1
+cd scootznet
+powershell -File scootznet-8bit.ps1
 ```
 
-### 16-bit Numbers (0-65535)
+### 16-bit Numbers (0-65535) - Advanced Training
 ```powershell
-# Full training (65,536 samples - slow but comprehensive)
-cd c:\codez\scootznet
-powershell -File scootznet.ps1
-
-# Subset training (1,024 samples - faster for testing)
-cd c:\codez\scootznet
+# Subset training (development)
 powershell -File scootznet-16bit-subset.ps1
+
+# Full training (research/production)
+powershell -File scootznet-16bit-full.ps1
 ```
-
-## Training Process
-
-1. **Data Generation**: Creates binary representations of all numbers in range
-2. **Normalization**: Targets are normalized to [0,1] range
-3. **Training**: Uses gradient descent with backpropagation
-4. **Testing**: Evaluates performance on random test numbers
-5. **Accuracy Reporting**: Provides individual and overall accuracy metrics
 
 ## Configuration
 
 ### Default Parameters
-- **Learning Rate**: 0.01
-- **Training Epochs**: 5,000-10,000 (varies by script)
-- **Architecture**: [Input_Size, 1] (direct mapping)
+- **Learning Rate**: 0.01 (adjustable)
+- **Training Epochs**: 2,500 epochs (all versions)
+- **Architecture**: Flexible - supports unlimited hidden layers
 
 ### Customization
-You can modify these parameters in the training scripts:
 ```powershell
-# Change network architecture
-$network = [NeuralNetwork]::new(@(16, 1), 0.01)
+# Current architecture (no hidden layers)
+$network = [NeuralNetwork]::new(@(8, 1), 0.01)     # 8-bit: [8 inputs → 1 output]
+$network = [NeuralNetwork]::new(@(16, 1), 0.01)    # 16-bit: [16 inputs → 1 output]
 
-# Adjust training epochs
-$network.Train($trainingInputs, $trainingTargets, 8000)
+# Hidden layer examples
+$network = [NeuralNetwork]::new(@(8, 4, 1), 0.01)      # Single hidden layer
+$network = [NeuralNetwork]::new(@(16, 12, 8, 4, 1), 0.01)  # Multiple hidden layers
+
+# Learning rate customization
+$network = [NeuralNetwork]::new(@(8, 1), 0.001)   # Conservative (0.001-0.005)
+$network = [NeuralNetwork]::new(@(8, 1), 0.05)    # Aggressive (0.05-0.1)
+
+# Training epochs
+$network.Train($trainingInputs, $trainingTargets, 2500)
 ```
+
+#### Guidelines
+- **Architecture**: First number = input size, last = 1 (output), middle = hidden layers
+- **Learning Rate**: Default 0.01, lower for stability, higher for speed
+- **Hidden Layers**: More layers = slower training, potentially better learning
 
 ## Sample Output
 
+### 8-bit Training Example
 ```
-Generating training data for 16-bit numbers (subset for faster training)...
-Generating training samples (every 64th number from 0-65535)...
-Training data generated: 1024 samples
-Each input is 16-bit binary, target is doubled value normalized to [0,1]
+Generating training data...
+Training data generated: 256 samples
+Each input is 8-bit binary, target is doubled value normalized to [0,1]
 
-Starting training...
-Training on subset for faster development and testing.
-Epoch 100/8000, Average Loss: 0.2145
-Epoch 200/8000, Average Loss: 0.1987
-...
-Total training time: 15.23 seconds
+Starting training for 2500 epochs...
+Epoch: 0 / 2500 - Starting training...
+Epoch: 100 / 2500 - Elapsed: 0.1s, Estimated remaining: 2.4s
+Epoch: 1000 / 2500 - Elapsed: 1.0s, Estimated remaining: 1.5s
+Epoch: 2000 / 2500 - Elapsed: 2.0s, Estimated remaining: 0.5s
+Training completed! Total time: 2.50 seconds
 
-Testing network with 15 random 16-bit inputs:
-Input: 12847, Predicted: 25694.2, Expected: 25694, Accuracy: 99.9%
-Input: 3921, Predicted: 7842.1, Expected: 7842, Accuracy: 99.9%
+Testing network with 10 random inputs:
+Input: 127, Predicted: 254.1, Expected: 254, Accuracy: 99.9%
+Input: 89, Predicted: 178.0, Expected: 178, Accuracy: 100.0%
 ...
-Overall Test Accuracy: 98.7%
+Overall Test Accuracy: 99.2%
 ```
 
 ## Technical Details
@@ -143,59 +116,54 @@ Output values are normalized to prevent saturation:
 $normalizedTarget = $doubled / $maxPossibleOutput
 ```
 
-### Weight Initialization
-Xavier initialization ensures stable training:
+## Architecture Flexibility
+
+### Hidden Layer Support
+The neural network supports **unlimited hidden layers** with **any number of neurons per layer**. Current scripts use direct mapping (no hidden layers) for simplicity, but you can easily add complex architectures.
+
+### Architecture Examples
 ```powershell
-$range = [Math]::Sqrt(6.0 / $numInputs)
-$weight = ($rand.NextDouble() - 0.5) * 2 * $range
+# Direct mapping (current scripts)
+$network = [NeuralNetwork]::new(@(8, 1), 0.01)    # 8-bit: Input → Output
+$network = [NeuralNetwork]::new(@(16, 1), 0.01)   # 16-bit: Input → Output
+
+# Single hidden layer
+$network = [NeuralNetwork]::new(@(8, 4, 1), 0.01)     # 8-bit: 8 → 4 → 1
+$network = [NeuralNetwork]::new(@(16, 32, 1), 0.01)   # 16-bit: 16 → 32 → 1
+
+# Multiple hidden layers
+$network = [NeuralNetwork]::new(@(16, 12, 8, 4, 1), 0.01)  # Progressive reduction
+$network = [NeuralNetwork]::new(@(8, 16, 8, 1), 0.01)      # Encoder-decoder style
 ```
 
-## Performance Considerations
+### When to Use Hidden Layers
+- **No Hidden Layers**: Fastest training, good for simple patterns like doubling
+- **Single Hidden Layer**: Non-linear patterns, moderate training time
+- **Multiple Hidden Layers**: Complex patterns, significantly longer training
 
-### Training Time
-- **8-bit full**: ~256 samples, very fast
-- **16-bit full**: ~65,536 samples, slow but comprehensive
-- **16-bit subset**: ~1,024 samples, balanced speed/coverage
-
-### Memory Usage
-- Minimal memory footprint
-- All data structures use PowerShell arrays
-- Suitable for educational and demonstration purposes
-
-## Limitations
-
-1. **Single Task**: Only learns to multiply by 2
-2. **Binary Input Only**: Requires binary representation of numbers
-3. **PowerShell Performance**: Not optimized for large-scale training
-4. **Simple Architecture**: No hidden layers, limited complexity
-
-## Educational Value
-
-This project demonstrates:
-- **Neural Network Fundamentals**: Forward/backward propagation
-- **Gradient Descent**: Weight and bias updates
-- **Data Preprocessing**: Binary conversion and normalization
-- **Training Loops**: Epoch-based learning with progress tracking
-- **Model Evaluation**: Accuracy metrics and testing procedures
+## Performance
+- **8-bit**: 256 samples, fast training (2,500 epochs)
+- **16-bit subset**: ~1,024 samples, moderate training
+- **16-bit full**: 65,536 samples, slow but comprehensive training
 
 ## Requirements
-
-- Windows PowerShell 5.1 or later
+- Windows PowerShell 5.1+ or PowerShell Core 6.0+
 - No external dependencies
-- Approximately 50MB RAM for 16-bit training
+- 10-200MB RAM (depending on version)
 
-## Contributing
+## Quick Start
+1. Navigate to project directory: `cd scootznet`
+2. Start with 8-bit: `powershell -File scootznet-8bit.ps1`
+3. Try 16-bit subset: `powershell -File scootznet-16bit-subset.ps1`
+4. Advanced: `powershell -File scootznet-16bit-full.ps1`
 
-This is an educational project. Feel free to:
-- Add new activation functions
-- Implement different architectures
-- Add support for other mathematical operations
-- Optimize for performance
-
-## License
-
-This project is for educational purposes. Use and modify freely.
+## Educational Value
+This project demonstrates:
+- Neural network fundamentals (forward/backward propagation)
+- Architecture flexibility (unlimited hidden layers)
+- Gradient descent and weight updates
+- Data preprocessing (binary conversion, normalization)
+- Model evaluation and accuracy metrics
 
 ---
-
 **ScootzNet** - Learning to double numbers, one bit at a time! 🧠✖️2️⃣
