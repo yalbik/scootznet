@@ -1,69 +1,159 @@
 class NeuralNetwork {
-    [Layer[]]$Layers
-    [decimal]$LearningRate
+    [Layer[]] $Layers
+    [double] $LearningRate
+    [double[]] $LastInput
+    [int[]] $LayerSizes
 
-    NeuralNetwork([int[]]$layerSizes, [decimal]$learningRate) {
-        $this.LearningRate = $LearningRate
+    # Constructor
+    NeuralNetwork([int[]] $layerSizes, [double] $learningRate) {
+        $this.LayerSizes = $layerSizes
+        $this.LearningRate = $learningRate
         $this.Layers = @()
+
+        # Create layers
         for ($i = 0; $i -lt $layerSizes.Length; $i++) {
-            $layerInputSize = if ($i -eq 0) { $layerSizes[$i] } else { $layerSizes[$i - 1] }
-            $this.Layers += [Layer]::new($layerSizes[$i], $layerInputSize)
+            $neuronCount = $layerSizes[$i]
+            
+            # Input size for this layer
+            if ($i -eq 0) {
+                # First layer (input layer) - neurons count equals input size
+                $inputCount = $layerSizes[$i]
+            } else {
+                # Hidden/output layers - input size is previous layer's neuron count
+                $inputCount = $layerSizes[$i - 1]
+            }
+            
+            # Determine if this is the output layer
+            $isOutputLayer = ($i -eq $layerSizes.Length - 1)
+            
+            # Create and add layer
+            $this.Layers += [Layer]::new($neuronCount, $inputCount, $isOutputLayer)
         }
-        Write-Host "Neural network initialized with learning rate $($this.LearningRate)"
+
+        # Report successful creation
+        Write-Host ""
+        Write-Host "=== Neural Network Successfully Created ==="
+        Write-Host "Learning Rate: $learningRate"
+        Write-Host "Total Layers: $($this.Layers.Length)"
+        Write-Host "Network Architecture: [$($layerSizes -join ', ')]"
+        
+        for ($i = 0; $i -lt $this.Layers.Length; $i++) {
+            $layerType = if ($i -eq 0) { "Input" } 
+                        elseif ($i -eq $this.Layers.Length - 1) { "Output" }
+                        else { "Hidden" }
+            Write-Host "  Layer $i ($layerType): $($this.Layers[$i].NeuronCount) neuron(s)"
+        }
+        Write-Host "==========================================="
+        Write-Host ""
     }
 
-    [double[]] Forward([double[]]$inputs) {
-        $outputs = $inputs
-        foreach ($layer in $this.Layers) {
-            $outputs = $layer.Forward($outputs)
+    # Forward pass through the network
+    [double[]] Forward([double[]] $inputs) {
+        $this.LastInput = $inputs
+        $currentOutputs = $inputs
+
+        for ($i = 0; $i -lt $this.Layers.Length; $i++) {
+            # Use sigmoid for all layers except output (which uses linear)
+            $useSigmoid = ($i -ne $this.Layers.Length - 1)
+            $currentOutputs = $this.Layers[$i].Forward($currentOutputs, $useSigmoid)
         }
-        return $outputs
+
+        return $currentOutputs
     }
 
-    [void] Backward([double[]]$expected) {
-        # Calculate output layer delta
-        $lastLayer = $this.Layers[-1]
-        for ($i = 0; $i -lt $lastLayer.Neurons.Length; $i++) {
-            $neuron = $lastLayer.Neurons[$i]
-            $neuron.Delta = ($expected[$i] - $neuron.Output) * $neuron.Output * (1 - $neuron.Output)
+    # Backward pass (backpropagation)
+    [void] Backward([double[]] $expected) {
+        # Calculate output layer delta (linear activation derivative = 1)
+        $outputLayer = $this.Layers[-1]
+        for ($i = 0; $i -lt $outputLayer.Neurons.Length; $i++) {
+            $neuron = $outputLayer.Neurons[$i]
+            $error = $expected[$i] - $neuron.Output
+            $neuron.Delta = $error  # Linear activation derivative is 1
         }
 
-        # Calculate hidden layers delta
-        for ($l = $this.Layers.Length - 2; $l -ge 0; $l--) {
-            $layer = $this.Layers[$l]
-            $nextLayer = $this.Layers[$l + 1]
-            for ($i = 0; $i -lt $layer.Neurons.Length; $i++) {
-                $neuron = $layer.Neurons[$i]
-                $sum = 0
-                for ($j = 0; $j -lt $nextLayer.Neurons.Length; $j++) {
-                    $sum += $nextLayer.Neurons[$j].Weights[$i] * $nextLayer.Neurons[$j].Delta
+        # Calculate hidden layer deltas (working backwards)
+        for ($layerIndex = $this.Layers.Length - 2; $layerIndex -ge 0; $layerIndex--) {
+            $currentLayer = $this.Layers[$layerIndex]
+            $nextLayer = $this.Layers[$layerIndex + 1]
+
+            for ($neuronIndex = 0; $neuronIndex -lt $currentLayer.Neurons.Length; $neuronIndex++) {
+                $neuron = $currentLayer.Neurons[$neuronIndex]
+                
+                # Sum weighted deltas from next layer
+                $weightedDeltaSum = 0.0
+                for ($nextNeuronIndex = 0; $nextNeuronIndex -lt $nextLayer.Neurons.Length; $nextNeuronIndex++) {
+                    $nextNeuron = $nextLayer.Neurons[$nextNeuronIndex]
+                    $weightedDeltaSum += $nextNeuron.Delta * $nextNeuron.Weights[$neuronIndex]
                 }
-                $neuron.Delta = $sum * $neuron.Output * (1 - $neuron.Output)
+                
+                # Apply sigmoid derivative
+                $sigmoidDerivative = $neuron.Output * (1.0 - $neuron.Output)
+                $neuron.Delta = $weightedDeltaSum * $sigmoidDerivative
             }
         }
 
         # Update weights and biases
-        foreach ($layer in $this.Layers) {
+        for ($layerIndex = 0; $layerIndex -lt $this.Layers.Length; $layerIndex++) {
+            $layer = $this.Layers[$layerIndex]
+            
+            # Get inputs for this layer
+            $layerInputs = if ($layerIndex -eq 0) { 
+                $this.LastInput 
+            } else { 
+                $this.Layers[$layerIndex - 1].GetOutputs() 
+            }
+
+            # Update each neuron in the layer
             foreach ($neuron in $layer.Neurons) {
-                for ($i = 0; $i -lt $neuron.Weights.Length; $i++) {
-                    $neuron.Weights[$i] += $this.LearningRate * $neuron.Delta * $neuron.Output
+                # Update weights
+                for ($weightIndex = 0; $weightIndex -lt $neuron.Weights.Length; $weightIndex++) {
+                    $weightUpdate = $this.LearningRate * $neuron.Delta * $layerInputs[$weightIndex]
+                    $neuron.Weights[$weightIndex] += $weightUpdate
                 }
-                $neuron.Bias += $this.LearningRate * $neuron.Delta
+                
+                # Update bias
+                $biasUpdate = $this.LearningRate * $neuron.Delta
+                $neuron.Bias += $biasUpdate
             }
         }
-    }
-
-    [void] Train([double[][]]$inputs, [double[][]]$outputs, [int]$epochs) {
+    }    # Train the network
+    [void] Train([double[][]] $inputs, [double[][]] $targets, [int] $epochs) {
+        Write-Host "Starting training for $epochs epochs..."
+        $trainingStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+        
         for ($epoch = 0; $epoch -lt $epochs; $epoch++) {
-            if ($epoch % 1000 -eq 0 -and $epoch -gt 0) { Write-Host "Epoch: $epoch" }
-            for ($i = 0; $i -lt $inputs.Length; $i++) {
-                $this.Forward($inputs[$i])
-                $this.Backward($outputs[$i])
+            # Progress reporting every 100 epochs
+            if ($epoch % 100 -eq 0) {
+                $elapsed = $trainingStopwatch.Elapsed.TotalSeconds
+                if ($epoch -gt 0) {
+                    $avgTimePerEpoch = $elapsed / $epoch
+                    $remainingEpochs = $epochs - $epoch
+                    $estimatedRemaining = $avgTimePerEpoch * $remainingEpochs
+                    Write-Host "Epoch: $epoch / $epochs - Elapsed: $([Math]::Round($elapsed, 1))s, Estimated remaining: $([Math]::Round($estimatedRemaining, 1))s"
+                } else {
+                    Write-Host "Epoch: $epoch / $epochs - Starting training..."
+                }
+            }
+
+            # Train on each sample
+            for ($sampleIndex = 0; $sampleIndex -lt $inputs.Length; $sampleIndex++) {
+                $this.Forward($inputs[$sampleIndex])
+                $this.Backward($targets[$sampleIndex])
             }
         }
+        
+        $trainingStopwatch.Stop()
+        Write-Host "Training completed! Total time: $([Math]::Round($trainingStopwatch.Elapsed.TotalSeconds, 2)) seconds"
     }
 
-    [double[]] Predict([double[]]$inputs) {
+    # Make a prediction
+    [double[]] Predict([double[]] $inputs) {
         return $this.Forward($inputs)
+    }
+
+    # Get network information
+    [string] GetNetworkInfo() {
+        $info = "Neural Network - Architecture: [$($this.LayerSizes -join ', ')], Learning Rate: $($this.LearningRate)"
+        return $info
     }
 }

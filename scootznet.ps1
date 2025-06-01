@@ -4,155 +4,84 @@ $Library = @(
     'lib\NeuralNetwork.ps1'
 )
 
-foreach ($File in $Library)
-{
-    try
-    {
-        $SourceFile = "$PSScriptRoot\$File"
-        Write-Host "Sourcing $($SourceFile)..."
-        . "$SourceFile"
+# Import the library files
+foreach ($lib in $Library) {
+    . (Join-Path $PSScriptRoot $lib)
+}
+
+# Create neural network with architecture [8, 1] - direct input to output
+$network = [NeuralNetwork]::new(@(8, 1), 0.01)
+
+# Generate training data for doubling 8-bit numbers
+Write-Host "Generating training data..."
+$trainingInputs = @()
+$trainingTargets = @()
+
+# Create training samples for all 8-bit numbers (0-255)
+for ($i = 0; $i -le 255; $i++) {
+    # Convert number to 8-bit binary array
+    $binaryInput = @()
+    for ($bit = 7; $bit -ge 0; $bit--) {
+        if (($i -band [Math]::Pow(2, $bit)) -ne 0) {
+            $binaryInput += 1.0
+        } else {
+            $binaryInput += 0.0
+        }
     }
-    catch
-    {
-        throw "Failed to load $($File):`n$_"
+    
+    # Target is the number doubled, normalized to [0,1] range
+    $doubled = $i * 2
+    $normalizedTarget = $doubled / 510.0  # 510 = 255 * 2 (max possible output)
+    
+    $trainingInputs += ,$binaryInput
+    $trainingTargets += ,@($normalizedTarget)
+}
+
+Write-Host "Training data generated: $($trainingInputs.Length) samples"
+Write-Host "Each input is 8-bit binary, target is doubled value normalized to [0,1]"
+
+# Train the network
+Write-Host "`nStarting training..."
+$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+$network.Train($trainingInputs, $trainingTargets, 10000)
+$stopwatch.Stop()
+Write-Host "Total training time: $([Math]::Round($stopwatch.Elapsed.TotalSeconds, 2)) seconds"
+
+# Test the network with random examples
+Write-Host "`nTesting network with 10 random inputs:"
+$rand = New-Object System.Random
+$testNumbers = @()
+for ($i = 0; $i -lt 10; $i++) {
+    $testNumbers += $rand.Next(0, 256)
+}
+$totalAccuracy = 0.0
+
+foreach ($testNum in $testNumbers) {
+    # Convert to binary
+    $binaryTest = @()
+    for ($bit = 7; $bit -ge 0; $bit--) {
+        if (($testNum -band [Math]::Pow(2, $bit)) -ne 0) {
+            $binaryTest += 1.0
+        } else {
+            $binaryTest += 0.0
+        }
     }
-}
-
-$NETWORK_LAYERS = @(8, 8)
-$LEARNING_RATE = 0.001
-$RANDOM_DATA_SIZE = 32
-$TRAINING_PASS_EPOCHS = 1000
-$TRAINING_PASSES = 100
-
-$RESULTS_FILE = "$($PSScriptRoot)\ScootznetTrainingResults.json"
-
-Function To-Binary ($Number)
-{
-    $binary = [Convert]::ToString($Number, 2).PadLeft(8, '0').ToCharArray() | ForEach-Object { [int]::Parse($_) }
-    return $binary
-}
-
-Function From-Binary ($Binary)
-{
-    return [Convert]::ToInt32($Binary -join '', 2)
-}
-
-Function Random-SevenBitNumber
-{
-    return Get-Random -Minimum 0 -Maximum 127
-}
-
-Function Smooth-Output ($RawOutput)
-{
-    $SmoothedOutput = @()
-    $RawOutput | ForEach-Object { $SmoothedOutput += [Math]::Round($_) }
-    return $SmoothedOutput
-}
-
-Function Actual-Delta ($Expected, $Actual)
-{
-    $Different = 0
-    for ($i = 0; $i -lt $Expected.Length; $i++)
-    {
-        $Different += [Math]::Abs($Expected[$i] - $Actual[$i])
+    
+    # Get prediction
+    $prediction = $network.Predict($binaryTest)
+    $denormalizedPrediction = $prediction[0] * 510.0  # Convert back to actual number
+    $expected = $testNum * 2
+      # Calculate accuracy percentage
+    $errorAmount = [Math]::Abs([double]$expected - [double]$denormalizedPrediction)
+    $accuracy = if ([double]$expected -eq 0.0) { 
+        if ([double]$denormalizedPrediction -eq 0.0) { 100.0 } else { 0.0 }
+    } else { 
+        [Math]::Max(0.0, 100.0 - ([double]$errorAmount / [double]$expected * 100.0))
     }
-    return ($Different / $Expected.Length)
+    $totalAccuracy += [double]$accuracy
+    
+    Write-Host "Input: $testNum, Predicted: $([Math]::Round([double]$denormalizedPrediction, 1)), Expected: $expected, Accuracy: $([Math]::Round([double]$accuracy, 1))%"
 }
 
-Write-Host "Creating a neural network with $($NETWORK_LAYERS.Length) layers: $($NETWORK_LAYERS -join '-')..."
-$MyNetwork = [NeuralNetwork]::new($NETWORK_LAYERS, $LEARNING_RATE)
-
-Write-Host "Training the network with $($TRAINING_PASSES) passes of $($TRAINING_PASS_EPOCHS) epochs each, $($RANDOM_DATA_SIZE) inputs per pass..."
-
-$Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-for ($Pass = 0; $Pass -lt $TRAINING_PASSES; $Pass++)
-{
-    Write-Host "Training pass $($Pass + 1) of $($TRAINING_PASSES) ($($Stopwatch.Elapsed.TotalSeconds)s elapsed)..."
-    $inputsBase = @()
-    while (([array]$inputsBase).Length -lt $RANDOM_DATA_SIZE)
-    { 
-        $inputsBase += Random-SevenBitNumber 
-    }
-
-    $inputs = @()
-    $outputs = @()
-    $inputsBase | ForEach-Object { 
-        $inputRow = To-Binary $_
-        $outputRow = To-Binary ($_ * 2)
-        $inputs += ,$inputRow
-        $outputs += ,$outputRow
-    }
-
-    $MyNetwork.Train($inputs, $outputs, $TRAINING_PASS_EPOCHS)
-}
-$Stopwatch.Stop()
-Write-Host "Training completed in $($Stopwatch.Elapsed.TotalSeconds) seconds"
-
-$testInputsInt = @(
-    0,
-    1,
-    2,
-    4,
-    8,
-    16,
-    32,
-    64
-)
-
-$expectedOutputsInt = $testInputsInt | ForEach-Object { [int]($_ * 2) }
-
-$testInputs = $testInputsInt | ForEach-Object { ,(To-Binary $_) }
-$expectedOutputs = $expectedOutputsInt | ForEach-Object { ,(To-Binary $_) }
-
-$ActualDeltas = @()
-for ($i = 0; $i -lt $testInputs.Length; $i++)
-{
-    $inputInt = $testInputsInt[$i]
-    $input = $testInputs[$i]
-    $expectedInt = $expectedOutputsInt[$i]
-    $expected = $expectedOutputs[$i]
-
-    $output = $MyNetwork.Predict(@($input))
-    $smoothedOutput = Smooth-Output $output
-    $smoothedOutputInt = From-Binary $smoothedOutput
-    $actualDelta = Actual-Delta $expected $smoothedOutput
-
-    $ActualDeltas += $actualDelta
-
-    $deltaColor = if ($actualDelta -eq 0) { 'Green' } elseif ($actualDelta -lt 0.2) { 'Yellow' } elseif ($actualDelta -lt 0.6) { 'Magenta' } else { 'Red' }
-    Write-Host "Input: $($input) ($($inputInt))"
-    Write-Host "`tExpected: $($expected) ($($expectedInt))"
-    Write-Host "`tPredicted (raw): $output"
-    Write-Host "`tPredicted (smoothed): $smoothedOutput ($($smoothedOutputInt))"
-    Write-Host "`tActual delta: " -NoNewLine
-    Write-Host "$actualDelta" -ForegroundColor $deltaColor
-}
-
-$ResultData = [PSCustomObject]@{
-    'NetworkLayers' = $NETWORK_LAYERS -join '-';
-    'LearningRate' = $LEARNING_RATE;
-    'RandomDataSize' = $RANDOM_DATA_SIZE;
-    'TrainingPassEpochs' = $TRAINING_PASS_EPOCHS;
-    'TrainingPasses' = $TRAINING_PASSES;
-    'TrainingTime' = $Stopwatch.Elapsed.TotalSeconds;
-    'AverageDelta' = $(($ActualDeltas | Measure-Object -Average).Average);
-}
-
-Write-Host "Average delta: $(($ActualDeltas | Measure-Object -Average).Average)"
-
-Write-Host "Updating results file $($RESULTS_FILE)..."
-if (Test-Path -Path "$RESULTS_FILE")
-{
-    $Results = [array](Get-Content $RESULTS_FILE | ConvertFrom-Json)
-    $Results += $ResultData
-    $Results | ConvertTo-Json | Set-Content -Path $RESULTS_FILE
-
-    # rewrite the json so members are all in the same order, ConvertTo-Json doesn't guarantee order
-    $Results = [array](Get-Content $RESULTS_FILE | ConvertFrom-Json)
-    $Results | ConvertTo-Json | Set-Content -Path $RESULTS_FILE
-}
-else
-{
-    $ResultData | ConvertTo-Json | Set-Content -Path $RESULTS_FILE
-}
-
+$averageAccuracy = $totalAccuracy / $testNumbers.Length
+Write-Host "`nOverall Test Accuracy: $([Math]::Round($averageAccuracy, 1))%"
